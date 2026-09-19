@@ -5,12 +5,17 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import { auth } from './firebase';
-import { WalletCards, Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
+import { WalletCards, Eye, EyeOff, Mail, Lock, User, ArrowLeft } from 'lucide-react';
 
 type Mode = 'login' | 'signup';
 
-export default function AuthPage() {
-  const [mode, setMode] = useState<Mode>('login');
+type AuthPageProps = {
+  initialMode?: Mode;
+  onBack?: () => void;
+};
+
+export default function AuthPage({ initialMode = 'login', onBack }: AuthPageProps) {
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [name, setName]         = useState('');
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
@@ -42,8 +47,10 @@ export default function AuthPage() {
         await updateProfile(cred.user, {
           displayName: name.trim(),
         });
+        // Auth state listener in App.tsx will set page → 'app'
       } else {
         await signInWithEmailAndPassword(auth, email.trim(), password);
+        // Auth state listener in App.tsx will set page → 'app'
       }
       // onAuthStateChanged in App.tsx takes over from here
     } catch (err: unknown) {
@@ -72,6 +79,11 @@ export default function AuthPage() {
             <div className="brand-mark"><WalletCards size={22} /></div>
             <span>Expense<span>Flow</span></span>
           </div>
+          {onBack && (
+            <button className="auth-back-btn" onClick={onBack} aria-label="Back to home">
+              <ArrowLeft size={15} /> Back to home
+            </button>
+          )}
           <h2 className="auth-tagline">
             Take control of<br />your finances.
           </h2>

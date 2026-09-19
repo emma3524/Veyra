@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import { auth } from './firebase';
 import AuthPage from './AuthPage';
+import LandingPage from './LandingPage';
 import {
   ArrowDown, ArrowDownLeft, ArrowUp, ArrowUpRight,
   BarChart3, Bell, CalendarDays, Check, ChevronDown,
@@ -148,9 +149,85 @@ function SummaryCard({ title, amount, note, color, icon, positive = true }: {
 
 // ─── Charts ───────────────────────────────────────────────────────────────────
 
-function DonutChart({ total }: { total: number }) {
+// Animated SVG donut — draws segments in on mount, re-animates when data changes
+function DonutChart({ total, segments }: {
+  total: number;
+  segments?: { pct: number; color: string }[];
+}) {
+  const defaultSegments = [
+    { pct: 31, color: '#7355ef' },
+    { pct: 19, color: '#3277ed' },
+    { pct: 16, color: '#25bd8d' },
+    { pct: 12, color: '#f5a719' },
+    { pct: 10, color: '#fa773a' },
+    { pct: 12, color: '#eb5892' },
+  ];
+  const segs = (segments && segments.length > 0) ? segments : defaultSegments;
+
+  const SIZE   = 160;
+  const STROKE = 32;
+  const R      = (SIZE - STROKE) / 2;
+  const CIRC   = 2 * Math.PI * R;
+  const CX     = SIZE / 2;
+
+  const [progress, setProgress] = useState(0);
+  const animRef = useRef<number | null>(null);
+  const keyRef  = useRef(0);
+
+  // Re-animate whenever segments change
+  const segKey = segs.map(s => s.pct).join(',');
+  useEffect(() => {
+    keyRef.current += 1;
+    setProgress(0);
+    if (animRef.current) cancelAnimationFrame(animRef.current);
+    const start = performance.now();
+    const duration = 900;
+    function tick(now: number) {
+      const t = Math.min((now - start) / duration, 1);
+      // Ease out cubic
+      const eased = 1 - Math.pow(1 - t, 3);
+      setProgress(eased);
+      if (t < 1) animRef.current = requestAnimationFrame(tick);
+    }
+    animRef.current = requestAnimationFrame(tick);
+    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segKey]);
+
+  // Build arc paths
+  let cumulativePct = 0;
+  const arcs = segs.map(s => {
+    const startPct = cumulativePct;
+    cumulativePct += s.pct;
+    // Apply animation progress — segments that haven't started yet are hidden,
+    // the active one is partially drawn, completed ones are full
+    const segStart  = startPct / 100;
+    const segEnd    = cumulativePct / 100;
+    const drawn     = Math.max(0, Math.min(progress - segStart, segEnd - segStart) / (segEnd - segStart));
+    const dashArray = CIRC * (s.pct / 100) * drawn;
+    const dashOffset= -(CIRC * (startPct / 100));
+    return { ...s, dashArray, dashOffset, startPct };
+  });
+
   return (
-    <div className="donut" aria-label="Spending breakdown chart">
+    <div className="donut-wrap" aria-label="Spending breakdown chart">
+      <svg width={SIZE} height={SIZE} style={{ transform: 'rotate(-90deg)' }}>
+        {/* Track */}
+        <circle cx={CX} cy={CX} r={R} fill="none" stroke="#edf0f7" strokeWidth={STROKE} />
+        {/* Animated segments */}
+        {arcs.map((arc, i) => (
+          <circle
+            key={i}
+            cx={CX} cy={CX} r={R}
+            fill="none"
+            stroke={arc.color}
+            strokeWidth={STROKE}
+            strokeDasharray={`${arc.dashArray} ${CIRC}`}
+            strokeDashoffset={arc.dashOffset}
+            strokeLinecap="butt"
+          />
+        ))}
+      </svg>
       <div className="donut-hole">
         <strong>{fmt(total)}</strong>
         <span>Total</span>
@@ -159,7 +236,28 @@ function DonutChart({ total }: { total: number }) {
   );
 }
 
+// Animated cash flow bars — grow up from zero on mount and whenever `bars` changes
 function CashFlowChart({ bars }: { bars: [number, number][] }) {
+  const [progress, setProgress] = useState(0);
+  const animRef = useRef<number | null>(null);
+
+  const barsKey = bars.map(b => b.join('')).join('|');
+  useEffect(() => {
+    setProgress(0);
+    if (animRef.current) cancelAnimationFrame(animRef.current);
+    const start    = performance.now();
+    const duration = 750;
+    function tick(now: number) {
+      const t = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 2.5);
+      setProgress(eased);
+      if (t < 1) animRef.current = requestAnimationFrame(tick);
+    }
+    animRef.current = requestAnimationFrame(tick);
+    return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [barsKey]);
+
   return (
     <div className="cash-flow-chart">
       <div className="y-axis">
@@ -171,8 +269,8 @@ function CashFlowChart({ bars }: { bars: [number, number][] }) {
         <div className="bars">
           {bars.map(([inc, exp], i) => (
             <div className="bar-group" key={i}>
-              <b style={{ height: `${inc}%` }} />
-              <em style={{ height: `${exp}%` }} />
+              <b style={{ height: `${inc * progress}%`, transition: 'none' }} />
+              <em style={{ height: `${exp * progress}%`, transition: 'none' }} />
             </div>
           ))}
         </div>
@@ -522,7 +620,10 @@ function AnalyticsPage({ transactions }: { transactions: Transaction[] }) {
         <article className="panel analytics-card">
           <div className="panel-heading"><h2>Spending Breakdown</h2></div>
           <div className="spending-body">
-            <DonutChart total={totalExpense} />
+            <DonutChart
+              total={totalExpense}
+              segments={spendingData.map(s => ({ pct: parseInt(s.percent), color: s.color }))}
+            />
             <div className="legend">
               {spendingData.map(item => (
                 <div className="legend-row" key={item.label}>
@@ -881,7 +982,10 @@ function DashboardPage({ user, transactions, onAdd, onEdit, onDelete, onViewAll,
               <EmptyState icon={<Grid2X2 size={28} />} title="No spending data" body="Your spending breakdown will appear once you add expense transactions." />
             ) : (
               <>
-                <DonutChart total={totalExpense} />
+                <DonutChart
+                  total={totalExpense}
+                  segments={spendingData.map(s => ({ pct: parseInt(s.percent), color: s.color }))}
+                />
                 <div className="legend">
                   {spendingData.map(item => (
                     <div className="legend-row" key={item.label}>
@@ -958,12 +1062,18 @@ function DashboardPage({ user, transactions, onAdd, onEdit, onDelete, onViewAll,
 function App() {
   const [authUser, setAuthUser]   = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [page, setPage] = useState<'landing' | 'auth' | 'app'>('landing');
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup');
 
   // Listen to Firebase auth state
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, user => {
       setAuthUser(user);
       setAuthLoading(false);
+      // If already signed in, skip straight to app
+      if (user) setPage('app');
+      // If signed out while on app, go back to landing
+      if (!user) setPage(prev => prev === 'app' ? 'landing' : prev);
     });
     return unsub;
   }, []);
@@ -1018,13 +1128,24 @@ function App() {
   function handleSignOut() {
     signOut(auth);
     setShowProfileMenu(false);
+    setPage('landing');
   }
 
   const navToTransactions = () => { setActiveNav('Transactions'); setMobileOpen(false); };
 
   // ── Render guards ──────────────────────────────────────────────────────────
   if (authLoading) return <LoadingScreen />;
-  if (!authUser)   return <AuthPage />;
+  if (page === 'landing') {
+    return (
+      <LandingPage
+        onGetStarted={() => { setAuthMode('signup'); setPage('auth'); }}
+        onLogin={() => { setAuthMode('login'); setPage('auth'); }}
+      />
+    );
+  }
+  if (page === 'auth' || !authUser) {
+    return <AuthPage initialMode={authMode} onBack={() => setPage('landing')} />;
+  }
 
   // ── Page renderer ──────────────────────────────────────────────────────────
   function renderPage() {
