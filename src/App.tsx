@@ -1,45 +1,18 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
+import { auth } from './firebase';
+import AuthPage from './AuthPage';
 import {
-  ArrowDown,
-  ArrowDownLeft,
-  ArrowUp,
-  ArrowUpRight,
-  BarChart3,
-  Bell,
-  CalendarDays,
-  Check,
-  ChevronDown,
-  CreditCard,
-  Gem,
-  Grid2X2,
-  LayoutDashboard,
-  Menu,
-  Moon,
-  Sun,
-  MoreVertical,
-  Plus,
-  Search,
-  Settings,
-  Sparkles,
-  Target,
-  WalletCards,
-  X,
-  Pencil,
-  Trash2,
-  User,
-  LogOut,
-  TrendingUp,
-  TrendingDown,
-  PiggyBank,
-  ShoppingBag,
-  Zap,
-  Coffee,
-  Car,
-  CheckCircle,
-  Crown,
+  ArrowDown, ArrowDownLeft, ArrowUp, ArrowUpRight,
+  BarChart3, Bell, CalendarDays, Check, ChevronDown,
+  CreditCard, Gem, Grid2X2, LayoutDashboard, Menu,
+  Moon, Sun, MoreVertical, Plus, Search, Settings,
+  Sparkles, Target, WalletCards, X, Pencil, Trash2,
+  User as UserIcon, LogOut, ShoppingBag, Zap, Coffee,
+  Car, CheckCircle, Crown,
 } from 'lucide-react';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type IconComponent = typeof LayoutDashboard;
 
@@ -79,88 +52,61 @@ type Goal = {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const navItems: { label: string; icon: IconComponent }[] = [
-  { label: 'Dashboard', icon: LayoutDashboard },
+  { label: 'Dashboard',    icon: LayoutDashboard },
   { label: 'Transactions', icon: CreditCard },
-  { label: 'Analytics', icon: BarChart3 },
-  { label: 'Budgets', icon: WalletCards },
-  { label: 'Goals', icon: Target },
-  { label: 'Categories', icon: Grid2X2 },
-  { label: 'Calendar', icon: CalendarDays },
-  { label: 'Settings', icon: Settings },
+  { label: 'Analytics',    icon: BarChart3 },
+  { label: 'Budgets',      icon: WalletCards },
+  { label: 'Goals',        icon: Target },
+  { label: 'Categories',   icon: Grid2X2 },
+  { label: 'Calendar',     icon: CalendarDays },
+  { label: 'Settings',     icon: Settings },
 ];
 
 const CATEGORIES = [
-  { label: 'Income', color: '#25bd8d' },
-  { label: 'Food & Dining', color: '#7355ef' },
-  { label: 'Transport', color: '#3277ed' },
+  { label: 'Income',          color: '#25bd8d' },
+  { label: 'Food & Dining',   color: '#7355ef' },
+  { label: 'Transport',       color: '#3277ed' },
   { label: 'Bills & Utilities', color: '#f5a719' },
-  { label: 'Shopping', color: '#fa773a' },
-  { label: 'Entertainment', color: '#eb5892' },
-  { label: 'Healthcare', color: '#f04b67' },
-  { label: 'Others', color: '#8b97b1' },
-];
-
-const INITIAL_TRANSACTIONS: Transaction[] = [
-  { id: '1', date: 'May 31, 2024', description: 'Salary Deposit', category: 'Income', categoryColor: '#25bd8d', type: 'Income', amount: '+ ₦150,000', rawAmount: 150000 },
-  { id: '2', date: 'May 31, 2024', description: 'Lunch at Ter...kulture', category: 'Food & Dining', categoryColor: '#7355ef', type: 'Expense', amount: '- ₦4,500', rawAmount: 4500 },
-  { id: '3', date: 'May 30, 2024', description: 'Bolt Ride', category: 'Transport', categoryColor: '#3277ed', type: 'Expense', amount: '- ₦2,800', rawAmount: 2800 },
-  { id: '4', date: 'May 30, 2024', description: 'Internet Subscription', category: 'Bills & Utilities', categoryColor: '#f5a719', type: 'Expense', amount: '- ₦3,500', rawAmount: 3500 },
-  { id: '5', date: 'May 29, 2024', description: 'Groceries', category: 'Food & Dining', categoryColor: '#7355ef', type: 'Expense', amount: '- ₦6,700', rawAmount: 6700 },
-  { id: '6', date: 'May 28, 2024', description: 'Netflix Subscription', category: 'Entertainment', categoryColor: '#eb5892', type: 'Expense', amount: '- ₦4,200', rawAmount: 4200 },
-  { id: '7', date: 'May 27, 2024', description: 'Freelance Payment', category: 'Income', categoryColor: '#25bd8d', type: 'Income', amount: '+ ₦45,000', rawAmount: 45000 },
-  { id: '8', date: 'May 26, 2024', description: 'Electricity Bill', category: 'Bills & Utilities', categoryColor: '#f5a719', type: 'Expense', amount: '- ₦8,500', rawAmount: 8500 },
-  { id: '9', date: 'May 25, 2024', description: 'Jumia Shopping', category: 'Shopping', categoryColor: '#fa773a', type: 'Expense', amount: '- ₦12,500', rawAmount: 12500 },
-  { id: '10', date: 'May 24, 2024', description: 'Pharmacy', category: 'Healthcare', categoryColor: '#f04b67', type: 'Expense', amount: '- ₦2,300', rawAmount: 2300 },
-];
-
-const INITIAL_NOTIFICATIONS: Notification[] = [
-  { id: '1', text: 'Your monthly report for May is ready.', read: false },
-  { id: '2', text: 'You are within your food budget for this month.', read: false },
-  { id: '3', text: 'New feature: Set savings goals and track progress!', read: false },
-];
-
-const spending = [
-  { label: 'Food & Dining', amount: '₦25,000', percent: '31%', color: '#7355ef' },
-  { label: 'Transport', amount: '₦15,000', percent: '19%', color: '#3277ed' },
-  { label: 'Shopping', amount: '₦12,500', percent: '16%', color: '#25bd8d' },
-  { label: 'Bills & Utilities', amount: '₦10,000', percent: '12%', color: '#f5a719' },
-  { label: 'Entertainment', amount: '₦8,000', percent: '10%', color: '#fa773a' },
-  { label: 'Others', amount: '₦10,000', percent: '12%', color: '#eb5892' },
-];
-
-const chartBars: [number, number][] = [
-  [20, 38], [34, 66], [25, 44], [11, 24], [8, 33], [41, 19], [18, 35], [13, 23], [45, 20], [27, 35], [14, 58], [31, 18], [8, 42], [22, 16], [15, 37], [32, 19], [18, 45], [9, 31], [23, 14], [16, 30], [7, 25], [22, 10], [14, 30], [10, 20],
-];
-
-const lastMonthBars: [number, number][] = [
-  [18, 42], [30, 55], [22, 38], [14, 28], [10, 30], [38, 22], [16, 40], [15, 20], [40, 25], [24, 40], [12, 50], [28, 20], [10, 38], [20, 18], [18, 42], [28, 22], [20, 38], [11, 28], [20, 16], [14, 33], [9, 22], [18, 12], [16, 28], [12, 18],
+  { label: 'Shopping',        color: '#fa773a' },
+  { label: 'Entertainment',   color: '#eb5892' },
+  { label: 'Healthcare',      color: '#f04b67' },
+  { label: 'Others',          color: '#8b97b1' },
 ];
 
 const PERIODS = ['This Month', 'Last Month', 'Last 3 Months', 'This Year'];
 
-const budgets: Budget[] = [
-  { label: 'Food & Dining', spent: 25000, limit: 35000, color: '#7355ef', icon: <Coffee size={16} /> },
-  { label: 'Transport', spent: 15000, limit: 20000, color: '#3277ed', icon: <Car size={16} /> },
-  { label: 'Shopping', spent: 12500, limit: 15000, color: '#fa773a', icon: <ShoppingBag size={16} /> },
-  { label: 'Bills & Utilities', spent: 10000, limit: 12000, color: '#f5a719', icon: <Zap size={16} /> },
-  { label: 'Entertainment', spent: 8000, limit: 10000, color: '#eb5892', icon: <Sparkles size={16} /> },
+const chartBars: [number, number][] = [
+  [20,38],[34,66],[25,44],[11,24],[8,33],[41,19],[18,35],[13,23],
+  [45,20],[27,35],[14,58],[31,18],[8,42],[22,16],[15,37],[32,19],
+  [18,45],[9,31],[23,14],[16,30],[7,25],[22,10],[14,30],[10,20],
+];
+const lastMonthBars: [number, number][] = [
+  [18,42],[30,55],[22,38],[14,28],[10,30],[38,22],[16,40],[15,20],
+  [40,25],[24,40],[12,50],[28,20],[10,38],[20,18],[18,42],[28,22],
+  [20,38],[11,28],[20,16],[14,33],[9,22],[18,12],[16,28],[12,18],
 ];
 
-const goals: Goal[] = [
-  { label: 'Emergency Fund', saved: 120000, target: 300000, color: '#25bd8d', deadline: 'Dec 2024' },
-  { label: 'New Laptop', saved: 75000, target: 200000, color: '#3277ed', deadline: 'Aug 2024' },
-  { label: 'Vacation Fund', saved: 40000, target: 150000, color: '#7355ef', deadline: 'Oct 2024' },
-  { label: 'Car Down Payment', saved: 200000, target: 500000, color: '#f5a719', deadline: 'Mar 2025' },
-];
-
-// ─── Small helpers ────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmt(n: number) {
   return '₦' + n.toLocaleString('en-NG');
 }
-
 function uid() {
   return Math.random().toString(36).slice(2);
+}
+
+/** Returns first name only — e.g. "Ada Okonkwo" → "Ada" */
+function firstName(displayName: string | null | undefined): string {
+  if (!displayName) return 'there';
+  return displayName.split(' ')[0];
+}
+
+/** Returns initials — e.g. "Ada Okonkwo" → "AO" */
+function initials(displayName: string | null | undefined): string {
+  if (!displayName) return '??';
+  const parts = displayName.trim().split(' ').filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function useOutsideClick(ref: React.RefObject<HTMLElement | null>, cb: () => void) {
@@ -173,28 +119,42 @@ function useOutsideClick(ref: React.RefObject<HTMLElement | null>, cb: () => voi
   }, [ref, cb]);
 }
 
+// ─── Greeting based on time of day ───────────────────────────────────────────
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 // ─── Shared UI atoms ──────────────────────────────────────────────────────────
 
 function IconBadge({ color, children }: { color: string; children: ReactNode }) {
   return <div className="icon-badge" style={{ backgroundColor: color }}>{children}</div>;
 }
 
-function SummaryCard({ title, amount, note, color, icon, positive = true }: { title: string; amount: string; note: string; color: string; icon: ReactNode; positive?: boolean }) {
+function SummaryCard({ title, amount, note, color, icon, positive = true }: {
+  title: string; amount: string; note: string; color: string; icon: ReactNode; positive?: boolean;
+}) {
   return (
     <article className="summary-card">
       <div className="summary-card-top"><IconBadge color={color}>{icon}</IconBadge><span>{title}</span></div>
       <strong>{amount}</strong>
-      <p className={positive ? 'positive' : 'negative'}>{positive ? '↗' : '↗'} {note}</p>
+      <p className={positive ? 'positive' : 'negative'}>↗ {note}</p>
     </article>
   );
 }
 
 // ─── Charts ───────────────────────────────────────────────────────────────────
 
-function DonutChart() {
+function DonutChart({ total }: { total: number }) {
   return (
     <div className="donut" aria-label="Spending breakdown chart">
-      <div className="donut-hole"><strong>₦80,500</strong><span>Total</span></div>
+      <div className="donut-hole">
+        <strong>{fmt(total)}</strong>
+        <span>Total</span>
+      </div>
     </div>
   );
 }
@@ -202,12 +162,58 @@ function DonutChart() {
 function CashFlowChart({ bars }: { bars: [number, number][] }) {
   return (
     <div className="cash-flow-chart">
-      <div className="y-axis"><span>₦60k</span><span>₦40k</span><span>₦20k</span><span>₦0</span><span>-₦20k</span><span>-₦40k</span></div>
-      <div className="plot">
-        <div className="grid-lines"><i /><i /><i /><i /><i /></div>
-        <div className="bars">{bars.map(([income, expense], index) => <div className="bar-group" key={index}><b style={{ height: `${income}%` }} /><em style={{ height: `${expense}%` }} /></div>)}</div>
-        <div className="x-axis"><span>May 1</span><span>May 8</span><span>May 15</span><span>May 22</span><span>May 31</span></div>
+      <div className="y-axis">
+        <span>₦60k</span><span>₦40k</span><span>₦20k</span>
+        <span>₦0</span><span>-₦20k</span><span>-₦40k</span>
       </div>
+      <div className="plot">
+        <div className="grid-lines"><i/><i/><i/><i/><i/></div>
+        <div className="bars">
+          {bars.map(([inc, exp], i) => (
+            <div className="bar-group" key={i}>
+              <b style={{ height: `${inc}%` }} />
+              <em style={{ height: `${exp}%` }} />
+            </div>
+          ))}
+        </div>
+        <div className="x-axis">
+          <span>May 1</span><span>May 8</span><span>May 15</span>
+          <span>May 22</span><span>May 31</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Empty state ──────────────────────────────────────────────────────────────
+
+function EmptyState({ icon, title, body, action, onAction }: {
+  icon: ReactNode; title: string; body: string; action?: string; onAction?: () => void;
+}) {
+  return (
+    <div className="empty-state-block">
+      <div className="empty-state-icon">{icon}</div>
+      <strong>{title}</strong>
+      <p>{body}</p>
+      {action && onAction && (
+        <button className="btn-primary" onClick={onAction}>{action}</button>
+      )}
+    </div>
+  );
+}
+
+// ─── Loading screen ───────────────────────────────────────────────────────────
+
+function LoadingScreen() {
+  return (
+    <div className="loading-screen">
+      <div className="auth-logo" style={{ justifyContent: 'center' }}>
+        <div className="brand-mark"><WalletCards size={22} /></div>
+        <span style={{ color: '#fff', fontSize: 20, fontWeight: 700 }}>
+          Expense<span style={{ color: '#7b62f5' }}>Flow</span>
+        </span>
+      </div>
+      <div className="loading-spinner" />
     </div>
   );
 }
@@ -216,9 +222,9 @@ function CashFlowChart({ bars }: { bars: [number, number][] }) {
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', h);
+    return () => document.removeEventListener('keydown', h);
   }, [onClose]);
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -233,23 +239,17 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
-// ─── Add / Edit Transaction modal ─────────────────────────────────────────────
+// ─── Transaction modal ────────────────────────────────────────────────────────
 
-function TransactionModal({
-  initial,
-  onSave,
-  onClose,
-}: {
-  initial?: Transaction;
-  onSave: (t: Transaction) => void;
-  onClose: () => void;
+function TransactionModal({ initial, onSave, onClose }: {
+  initial?: Transaction; onSave: (t: Transaction) => void; onClose: () => void;
 }) {
-  const [date, setDate] = useState(initial?.date ?? '');
+  const [date, setDate]               = useState(initial?.date ?? '');
   const [description, setDescription] = useState(initial?.description ?? '');
-  const [category, setCategory] = useState(initial?.category ?? 'Food & Dining');
-  const [type, setType] = useState<'Income' | 'Expense'>(initial?.type ?? 'Expense');
-  const [amount, setAmount] = useState(initial ? String(initial.rawAmount) : '');
-  const [error, setError] = useState('');
+  const [category, setCategory]       = useState(initial?.category ?? 'Food & Dining');
+  const [type, setType]               = useState<'Income' | 'Expense'>(initial?.type ?? 'Expense');
+  const [amount, setAmount]           = useState(initial ? String(initial.rawAmount) : '');
+  const [error, setError]             = useState('');
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -274,33 +274,21 @@ function TransactionModal({
     <Modal title={initial ? 'Edit Transaction' : 'Add Transaction'} onClose={onClose}>
       <form className="modal-form" onSubmit={handleSubmit} noValidate>
         {error && <p className="form-error">{error}</p>}
-        <label>
-          Date
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
-        </label>
-        <label>
-          Description
-          <input type="text" placeholder="e.g. Salary Deposit" value={description} onChange={e => setDescription(e.target.value)} required />
-        </label>
+        <label>Date<input type="date" value={date} onChange={e => setDate(e.target.value)} required /></label>
+        <label>Description<input type="text" placeholder="e.g. Salary Deposit" value={description} onChange={e => setDescription(e.target.value)} required /></label>
         <div className="form-row">
-          <label>
-            Type
+          <label>Type
             <select value={type} onChange={e => setType(e.target.value as 'Income' | 'Expense')}>
-              <option>Income</option>
-              <option>Expense</option>
+              <option>Income</option><option>Expense</option>
             </select>
           </label>
-          <label>
-            Category
+          <label>Category
             <select value={category} onChange={e => setCategory(e.target.value)}>
               {CATEGORIES.map(c => <option key={c.label}>{c.label}</option>)}
             </select>
           </label>
         </div>
-        <label>
-          Amount (₦)
-          <input type="number" min="0" step="any" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} required />
-        </label>
+        <label>Amount (₦)<input type="number" min="0" step="any" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} required /></label>
         <div className="form-actions">
           <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
           <button type="submit" className="btn-primary">{initial ? 'Save Changes' : 'Add Transaction'}</button>
@@ -314,12 +302,9 @@ function TransactionModal({
 
 function PremiumModal({ onClose }: { onClose: () => void }) {
   const features = [
-    'Unlimited transaction history',
-    'Advanced analytics & reports',
-    'Multi-currency support',
-    'Export to CSV / PDF',
-    'Priority customer support',
-    'Custom budget categories',
+    'Unlimited transaction history', 'Advanced analytics & reports',
+    'Multi-currency support', 'Export to CSV / PDF',
+    'Priority customer support', 'Custom budget categories',
   ];
   return (
     <Modal title="Upgrade to Premium" onClose={onClose}>
@@ -342,18 +327,20 @@ function PremiumModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ─── Date range picker modal ──────────────────────────────────────────────────
+// ─── Date range modal ─────────────────────────────────────────────────────────
 
-function DateRangeModal({ current, onSave, onClose }: { current: string; onSave: (label: string) => void; onClose: () => void }) {
+function DateRangeModal({ current, onSave, onClose }: {
+  current: string; onSave: (label: string) => void; onClose: () => void;
+}) {
   const [start, setStart] = useState('');
-  const [end, setEnd] = useState('');
-  const presets = ['This Month', 'Last Month', 'Last 3 Months', 'Last 6 Months', 'This Year', 'All Time'];
+  const [end, setEnd]     = useState('');
+  const presets = ['This Month','Last Month','Last 3 Months','Last 6 Months','This Year','All Time'];
 
   function handleApply(e: React.FormEvent) {
     e.preventDefault();
     if (!start || !end) return;
-    const fmt = (s: string) => new Date(s).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
-    onSave(`${fmt(start)} – ${fmt(end)}`);
+    const f = (s: string) => new Date(s).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' });
+    onSave(`${f(start)} – ${f(end)}`);
     onClose();
   }
 
@@ -362,9 +349,7 @@ function DateRangeModal({ current, onSave, onClose }: { current: string; onSave:
       <div className="date-modal-body">
         <p className="date-current">Current: <strong>{current}</strong></p>
         <div className="date-presets">
-          {presets.map(p => (
-            <button key={p} className="preset-btn" onClick={() => { onSave(p); onClose(); }}>{p}</button>
-          ))}
+          {presets.map(p => <button key={p} className="preset-btn" onClick={() => { onSave(p); onClose(); }}>{p}</button>)}
         </div>
         <p className="date-or">— or pick a custom range —</p>
         <form className="modal-form" onSubmit={handleApply} noValidate>
@@ -382,9 +367,11 @@ function DateRangeModal({ current, onSave, onClose }: { current: string; onSave:
   );
 }
 
-// ─── Transaction row ⋮ menu ───────────────────────────────────────────────────
+// ─── Row ⋮ menu ───────────────────────────────────────────────────────────────
 
-function RowMenu({ transaction, onEdit, onDelete }: { transaction: Transaction; onEdit: () => void; onDelete: () => void }) {
+function RowMenu({ transaction, onEdit, onDelete }: {
+  transaction: Transaction; onEdit: () => void; onDelete: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useOutsideClick(ref, () => setOpen(false));
@@ -403,28 +390,19 @@ function RowMenu({ transaction, onEdit, onDelete }: { transaction: Transaction; 
   );
 }
 
-// ─── Transactions page (full) ─────────────────────────────────────────────────
+// ─── Transactions page ────────────────────────────────────────────────────────
 
-function TransactionsPage({
-  transactions,
-  onAdd,
-  onEdit,
-  onDelete,
-  searchQuery,
-}: {
-  transactions: Transaction[];
-  onAdd: () => void;
-  onEdit: (t: Transaction) => void;
-  onDelete: (id: string) => void;
-  searchQuery: string;
+function TransactionsPage({ transactions, onAdd, onEdit, onDelete, searchQuery }: {
+  transactions: Transaction[]; onAdd: () => void;
+  onEdit: (t: Transaction) => void; onDelete: (id: string) => void; searchQuery: string;
 }) {
-  const [filter, setFilter] = useState<'All' | 'Income' | 'Expense'>('All');
+  const [filter, setFilter]     = useState<'All' | 'Income' | 'Expense'>('All');
   const [catFilter, setCatFilter] = useState('All');
 
   const visible = transactions.filter(t => {
-    const matchType = filter === 'All' || t.type === filter;
-    const matchCat = catFilter === 'All' || t.category === catFilter;
-    const q = searchQuery.toLowerCase();
+    const matchType   = filter === 'All' || t.type === filter;
+    const matchCat    = catFilter === 'All' || t.category === catFilter;
+    const q           = searchQuery.toLowerCase();
     const matchSearch = !q || t.description.toLowerCase().includes(q) || t.category.toLowerCase().includes(q) || t.amount.toLowerCase().includes(q);
     return matchType && matchCat && matchSearch;
   });
@@ -437,7 +415,7 @@ function TransactionsPage({
       </div>
       <div className="filter-bar">
         <div className="filter-group">
-          {(['All', 'Income', 'Expense'] as const).map(f => (
+          {(['All','Income','Expense'] as const).map(f => (
             <button key={f} className={filter === f ? 'filter-btn active' : 'filter-btn'} onClick={() => setFilter(f)}>{f}</button>
           ))}
         </div>
@@ -448,28 +426,34 @@ function TransactionsPage({
       </div>
       <div className="panel transactions-panel">
         <div className="table-wrap">
-          {visible.length === 0
-            ? <p className="empty-state">No transactions match your filters.</p>
-            : (
-              <table>
-                <thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Type</th><th>Amount</th><th>Status</th><th /></tr></thead>
-                <tbody>
-                  {visible.map(transaction => (
-                    <tr key={transaction.id}>
-                      <td>{transaction.date}</td>
-                      <td className="description">{transaction.description}</td>
-                      <td><span className="category"><i style={{ backgroundColor: transaction.categoryColor }} />{transaction.category}</span></td>
-                      <td><span className={transaction.type === 'Income' ? 'type income' : 'type expense'}>{transaction.type === 'Income' ? <ArrowDown size={14} /> : <ArrowUp size={14} />}</span></td>
-                      <td className={transaction.type === 'Income' ? 'amount income-text' : 'amount expense-text'}>{transaction.amount}</td>
-                      <td><span className="status"><Check size={12} /> Completed</span></td>
-                      <td>
-                        <RowMenu transaction={transaction} onEdit={() => onEdit(transaction)} onDelete={() => onDelete(transaction.id)} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+          {visible.length === 0 ? (
+            <EmptyState
+              icon={<CreditCard size={32} />}
+              title="No transactions yet"
+              body={searchQuery || filter !== 'All' || catFilter !== 'All'
+                ? "Nothing matches your current filters."
+                : "Add your first transaction to get started."}
+              action={!searchQuery && filter === 'All' && catFilter === 'All' ? '+ Add Transaction' : undefined}
+              onAction={!searchQuery && filter === 'All' && catFilter === 'All' ? onAdd : undefined}
+            />
+          ) : (
+            <table>
+              <thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Type</th><th>Amount</th><th>Status</th><th /></tr></thead>
+              <tbody>
+                {visible.map(t => (
+                  <tr key={t.id}>
+                    <td>{t.date}</td>
+                    <td className="description">{t.description}</td>
+                    <td><span className="category"><i style={{ backgroundColor: t.categoryColor }} />{t.category}</span></td>
+                    <td><span className={t.type === 'Income' ? 'type income' : 'type expense'}>{t.type === 'Income' ? <ArrowDown size={14} /> : <ArrowUp size={14} />}</span></td>
+                    <td className={t.type === 'Income' ? 'amount income-text' : 'amount expense-text'}>{t.amount}</td>
+                    <td><span className="status"><Check size={12} /> Completed</span></td>
+                    <td><RowMenu transaction={t} onEdit={() => onEdit(t)} onDelete={() => onDelete(t.id)} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>
@@ -478,15 +462,40 @@ function TransactionsPage({
 
 // ─── Analytics page ───────────────────────────────────────────────────────────
 
-function AnalyticsPage() {
-  const monthly = [
-    { month: 'Jan', income: 200000, expense: 70000 },
-    { month: 'Feb', income: 220000, expense: 85000 },
-    { month: 'Mar', income: 195000, expense: 90000 },
-    { month: 'Apr', income: 240000, expense: 78000 },
-    { month: 'May', income: 250000, expense: 80500 },
-  ];
-  const maxVal = Math.max(...monthly.flatMap(m => [m.income, m.expense]));
+function AnalyticsPage({ transactions }: { transactions: Transaction[] }) {
+  if (transactions.length === 0) {
+    return (
+      <div className="page-analytics">
+        <div className="page-heading"><div><h1>Analytics</h1><p>Deep dive into your financial patterns.</p></div></div>
+        <EmptyState icon={<BarChart3 size={32} />} title="No data yet" body="Add some transactions and your analytics will appear here automatically." />
+      </div>
+    );
+  }
+
+  // Build monthly summary from real transactions
+  const monthMap: Record<string, { income: number; expense: number }> = {};
+  transactions.forEach(t => {
+    const d = new Date(t.date);
+    const key = d.toLocaleString('en-NG', { month: 'short', year: 'numeric' });
+    if (!monthMap[key]) monthMap[key] = { income: 0, expense: 0 };
+    if (t.type === 'Income') monthMap[key].income += t.rawAmount;
+    else monthMap[key].expense += t.rawAmount;
+  });
+  const monthly = Object.entries(monthMap).map(([month, v]) => ({ month: month.split(' ')[0], ...v })).slice(-5);
+  const maxVal  = Math.max(...monthly.flatMap(m => [m.income, m.expense]), 1);
+
+  // Spending by category
+  const catMap: Record<string, { amount: number; color: string }> = {};
+  transactions.filter(t => t.type === 'Expense').forEach(t => {
+    if (!catMap[t.category]) catMap[t.category] = { amount: 0, color: t.categoryColor };
+    catMap[t.category].amount += t.rawAmount;
+  });
+  const totalExpense = Object.values(catMap).reduce((s, v) => s + v.amount, 0) || 1;
+  const spendingData = Object.entries(catMap).map(([label, v]) => ({
+    label, color: v.color,
+    amount: fmt(v.amount),
+    percent: Math.round((v.amount / totalExpense) * 100) + '%',
+  }));
 
   return (
     <div className="page-analytics">
@@ -513,9 +522,15 @@ function AnalyticsPage() {
         <article className="panel analytics-card">
           <div className="panel-heading"><h2>Spending Breakdown</h2></div>
           <div className="spending-body">
-            <DonutChart />
+            <DonutChart total={totalExpense} />
             <div className="legend">
-              {spending.map(item => <div className="legend-row" key={item.label}><span className="legend-label"><i style={{ backgroundColor: item.color }} />{item.label}</span><strong>{item.amount}</strong><small>{item.percent}</small></div>)}
+              {spendingData.map(item => (
+                <div className="legend-row" key={item.label}>
+                  <span className="legend-label"><i style={{ backgroundColor: item.color }} />{item.label}</span>
+                  <strong>{item.amount}</strong>
+                  <small>{item.percent}</small>
+                </div>
+              ))}
             </div>
           </div>
         </article>
@@ -523,11 +538,11 @@ function AnalyticsPage() {
           <div className="panel-heading"><h2>Savings Rate Trend</h2></div>
           <div className="savings-trend">
             {monthly.map(m => {
-              const rate = Math.round(((m.income - m.expense) / m.income) * 100);
+              const rate = m.income > 0 ? Math.round(((m.income - m.expense) / m.income) * 100) : 0;
               return (
                 <div className="trend-item" key={m.month}>
                   <div className="trend-bar-wrap">
-                    <div className="trend-bar" style={{ height: `${rate * 1.4}px`, background: rate >= 60 ? '#25bd8d' : rate >= 40 ? '#f5a719' : '#f04b67' }} />
+                    <div className="trend-bar" style={{ height: `${Math.max(rate, 0) * 1.4}px`, background: rate >= 60 ? '#25bd8d' : rate >= 40 ? '#f5a719' : '#f04b67' }} />
                   </div>
                   <span>{m.month}</span>
                   <small>{rate}%</small>
@@ -543,47 +558,94 @@ function AnalyticsPage() {
 
 // ─── Budgets page ─────────────────────────────────────────────────────────────
 
-function BudgetsPage({ onAddTransaction }: { onAddTransaction: () => void }) {
+function BudgetsPage({ transactions, onAddTransaction }: {
+  transactions: Transaction[]; onAddTransaction: () => void;
+}) {
+  // Derive spent per category from real transactions
+  const spentMap: Record<string, number> = {};
+  transactions.filter(t => t.type === 'Expense').forEach(t => {
+    spentMap[t.category] = (spentMap[t.category] ?? 0) + t.rawAmount;
+  });
+
+  const budgetDefs: { label: string; limit: number; color: string; icon: ReactNode }[] = [
+    { label: 'Food & Dining',    limit: 35000, color: '#7355ef', icon: <Coffee size={16} /> },
+    { label: 'Transport',        limit: 20000, color: '#3277ed', icon: <Car size={16} /> },
+    { label: 'Shopping',         limit: 15000, color: '#fa773a', icon: <ShoppingBag size={16} /> },
+    { label: 'Bills & Utilities',limit: 12000, color: '#f5a719', icon: <Zap size={16} /> },
+    { label: 'Entertainment',    limit: 10000, color: '#eb5892', icon: <Sparkles size={16} /> },
+  ];
+
+  const hasActivity = Object.keys(spentMap).length > 0;
+
   return (
     <div className="page-budgets">
       <div className="page-heading">
         <div><h1>Budgets</h1><p>Keep your spending in check.</p></div>
         <button className="add-button" onClick={onAddTransaction}><Plus size={17} /> Add Transaction</button>
       </div>
-      <div className="budgets-grid">
-        {budgets.map(b => {
-          const pct = Math.min(Math.round((b.spent / b.limit) * 100), 100);
-          const over = b.spent > b.limit;
-          return (
-            <article className="panel budget-card" key={b.label}>
-              <div className="budget-top">
-                <div className="budget-icon" style={{ background: b.color + '22', color: b.color }}>{b.icon}</div>
-                <div>
-                  <strong>{b.label}</strong>
-                  <small>{fmt(b.spent)} of {fmt(b.limit)}</small>
+      {!hasActivity ? (
+        <EmptyState
+          icon={<WalletCards size={32} />}
+          title="No spending data yet"
+          body="Once you add expense transactions, your budget progress will show up here."
+          action="+ Add Transaction"
+          onAction={onAddTransaction}
+        />
+      ) : (
+        <div className="budgets-grid">
+          {budgetDefs.map(b => {
+            const spent = spentMap[b.label] ?? 0;
+            const pct   = Math.min(Math.round((spent / b.limit) * 100), 100);
+            const over  = spent > b.limit;
+            return (
+              <article className="panel budget-card" key={b.label}>
+                <div className="budget-top">
+                  <div className="budget-icon" style={{ background: b.color + '22', color: b.color }}>{b.icon}</div>
+                  <div><strong>{b.label}</strong><small>{fmt(spent)} of {fmt(b.limit)}</small></div>
+                  <span className={over ? 'budget-pct over' : 'budget-pct'}>{pct}%</span>
                 </div>
-                <span className={over ? 'budget-pct over' : 'budget-pct'}>{pct}%</span>
-              </div>
-              <div className="budget-bar-track">
-                <div className="budget-bar-fill" style={{ width: `${pct}%`, background: over ? '#f04b67' : b.color }} />
-              </div>
-              {over && <p className="budget-warn">Over budget by {fmt(b.spent - b.limit)}</p>}
-            </article>
-          );
-        })}
-      </div>
+                <div className="budget-bar-track">
+                  <div className="budget-bar-fill" style={{ width: `${pct}%`, background: over ? '#f04b67' : b.color }} />
+                </div>
+                {over && <p className="budget-warn">Over budget by {fmt(spent - b.limit)}</p>}
+              </article>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Goals page ───────────────────────────────────────────────────────────────
 
-function GoalsPage() {
+function GoalsPage({ transactions }: { transactions: Transaction[] }) {
+  // Total income saved so far (income minus expenses)
+  const totalIncome  = transactions.filter(t => t.type === 'Income').reduce((s, t) => s + t.rawAmount, 0);
+  const totalExpense = transactions.filter(t => t.type === 'Expense').reduce((s, t) => s + t.rawAmount, 0);
+  const netSavings   = Math.max(totalIncome - totalExpense, 0);
+
+  const goalDefs: Goal[] = [
+    { label: 'Emergency Fund',   saved: netSavings, target: 300000, color: '#25bd8d', deadline: 'Dec 2025' },
+    { label: 'New Laptop',       saved: Math.min(netSavings * 0.3, 200000), target: 200000, color: '#3277ed', deadline: 'Aug 2025' },
+    { label: 'Vacation Fund',    saved: Math.min(netSavings * 0.15, 150000), target: 150000, color: '#7355ef', deadline: 'Oct 2025' },
+    { label: 'Car Down Payment', saved: Math.min(netSavings * 0.5, 500000), target: 500000, color: '#f5a719', deadline: 'Mar 2026' },
+  ];
+
+  if (transactions.length === 0) {
+    return (
+      <div className="page-goals">
+        <div className="page-heading"><div><h1>Goals</h1><p>Track your savings milestones.</p></div></div>
+        <EmptyState icon={<Target size={32} />} title="No savings data yet" body="Your goal progress will update automatically as you log income and expenses." />
+      </div>
+    );
+  }
+
   return (
     <div className="page-goals">
       <div className="page-heading"><div><h1>Goals</h1><p>Track your savings milestones.</p></div></div>
       <div className="goals-grid">
-        {goals.map(g => {
+        {goalDefs.map(g => {
           const pct = Math.min(Math.round((g.saved / g.target) * 100), 100);
           return (
             <article className="panel goal-card" key={g.label}>
@@ -593,7 +655,7 @@ function GoalsPage() {
                 <span className="goal-deadline">{g.deadline}</span>
               </div>
               <div className="goal-amounts">
-                <span className="goal-saved">{fmt(g.saved)}</span>
+                <span className="goal-saved">{fmt(Math.round(g.saved))}</span>
                 <span className="goal-target">of {fmt(g.target)}</span>
               </div>
               <div className="budget-bar-track">
@@ -601,7 +663,7 @@ function GoalsPage() {
               </div>
               <div className="goal-footer">
                 <span>{pct}% complete</span>
-                <span>{fmt(g.target - g.saved)} to go</span>
+                <span>{fmt(Math.max(g.target - Math.round(g.saved), 0))} to go</span>
               </div>
             </article>
           );
@@ -613,17 +675,30 @@ function GoalsPage() {
 
 // ─── Categories page ──────────────────────────────────────────────────────────
 
-function CategoriesPage() {
+function CategoriesPage({ transactions }: { transactions: Transaction[] }) {
+  const catTotals: Record<string, { color: string; total: number; count: number }> = {};
+  transactions.forEach(t => {
+    if (!catTotals[t.category]) catTotals[t.category] = { color: t.categoryColor, total: 0, count: 0 };
+    catTotals[t.category].total += t.rawAmount;
+    catTotals[t.category].count += 1;
+  });
+
   return (
     <div className="page-categories">
       <div className="page-heading"><div><h1>Categories</h1><p>Manage how your spending is grouped.</p></div></div>
       <div className="categories-grid">
-        {CATEGORIES.map(c => (
-          <article className="panel category-card" key={c.label}>
-            <div className="cat-dot" style={{ background: c.color }} />
-            <strong>{c.label}</strong>
-          </article>
-        ))}
+        {CATEGORIES.map(c => {
+          const data = catTotals[c.label];
+          return (
+            <article className="panel category-card" key={c.label}>
+              <div className="cat-dot" style={{ background: c.color }} />
+              <strong>{c.label}</strong>
+              {data
+                ? <small className="cat-stat">{data.count} transaction{data.count !== 1 ? 's' : ''} · {fmt(data.total)}</small>
+                : <small className="cat-stat cat-stat-empty">No activity</small>}
+            </article>
+          );
+        })}
       </div>
     </div>
   );
@@ -633,12 +708,12 @@ function CategoriesPage() {
 
 function CalendarPage({ transactions }: { transactions: Transaction[] }) {
   const today = new Date();
-  const [year, setYear] = useState(today.getFullYear());
+  const [year, setYear]   = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
 
-  const monthName = new Date(year, month).toLocaleString('en-NG', { month: 'long', year: 'numeric' });
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthName  = new Date(year, month).toLocaleString('en-NG', { month: 'long', year: 'numeric' });
+  const firstDay   = new Date(year, month, 1).getDay();
+  const daysInMonth= new Date(year, month + 1, 0).getDate();
 
   const byDay: Record<number, Transaction[]> = {};
   transactions.forEach(t => {
@@ -649,7 +724,10 @@ function CalendarPage({ transactions }: { transactions: Transaction[] }) {
     }
   });
 
-  const cells: (number | null)[] = [...Array(firstDay).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+  const cells: (number | null)[] = [
+    ...Array(firstDay).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
 
   return (
     <div className="page-calendar">
@@ -661,16 +739,28 @@ function CalendarPage({ transactions }: { transactions: Transaction[] }) {
           <button className="cal-nav-btn" onClick={() => { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); }}>›</button>
         </div>
         <div className="cal-grid">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => <div className="cal-day-label" key={d}>{d}</div>)}
+          {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => <div className="cal-day-label" key={d}>{d}</div>)}
           {cells.map((day, i) => (
-            <div className={`cal-cell ${day === null ? 'empty' : ''} ${day === today.getDate() && month === today.getMonth() && year === today.getFullYear() ? 'today' : ''}`} key={i}>
+            <div
+              className={`cal-cell ${day === null ? 'empty' : ''} ${day === today.getDate() && month === today.getMonth() && year === today.getFullYear() ? 'today' : ''}`}
+              key={i}
+            >
               {day && <>
                 <span className="cal-day-num">{day}</span>
-                {byDay[day] && <div className="cal-dots">{byDay[day].slice(0, 3).map(t => <span key={t.id} className="cal-dot" style={{ background: t.categoryColor }} title={t.description} />)}</div>}
+                {byDay[day] && (
+                  <div className="cal-dots">
+                    {byDay[day].slice(0, 3).map(t => <span key={t.id} className="cal-dot" style={{ background: t.categoryColor }} title={t.description} />)}
+                  </div>
+                )}
               </>}
             </div>
           ))}
         </div>
+        {transactions.length === 0 && (
+          <p style={{ textAlign: 'center', color: '#a0aabc', fontSize: 12, padding: '20px 0' }}>
+            No transactions to display. Add one to see it here.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -678,11 +768,10 @@ function CalendarPage({ transactions }: { transactions: Transaction[] }) {
 
 // ─── Settings page ────────────────────────────────────────────────────────────
 
-function SettingsPage({ dark, setDark }: { dark: boolean; setDark: (v: boolean) => void }) {
-  const [name, setName] = useState('Prince K.');
-  const [email, setEmail] = useState('prince@example.com');
+function SettingsPage({ user, dark, setDark }: { user: User; dark: boolean; setDark: (v: boolean) => void }) {
+  const [name, setName]       = useState(user.displayName ?? '');
   const [currency, setCurrency] = useState('NGN (₦)');
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved]     = useState(false);
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -696,10 +785,10 @@ function SettingsPage({ dark, setDark }: { dark: boolean; setDark: (v: boolean) 
       <div className="settings-grid">
         <article className="panel settings-card">
           <div className="panel-heading"><h2>Profile</h2></div>
-          <form className="modal-form settings-form" onSubmit={handleSave}>
+          <form className="settings-form" onSubmit={handleSave}>
             {saved && <p className="form-success">Changes saved successfully!</p>}
             <label>Full Name<input value={name} onChange={e => setName(e.target.value)} /></label>
-            <label>Email Address<input type="email" value={email} onChange={e => setEmail(e.target.value)} /></label>
+            <label>Email Address<input type="email" value={user.email ?? ''} readOnly style={{ opacity: 0.6, cursor: 'not-allowed' }} /></label>
             <label>Currency<select value={currency} onChange={e => setCurrency(e.target.value)}>
               <option>NGN (₦)</option><option>USD ($)</option><option>GBP (£)</option><option>EUR (€)</option>
             </select></label>
@@ -708,7 +797,7 @@ function SettingsPage({ dark, setDark }: { dark: boolean; setDark: (v: boolean) 
         </article>
         <article className="panel settings-card">
           <div className="panel-heading"><h2>Appearance</h2></div>
-          <div className="settings-form" style={{ padding: '16px' }}>
+          <div className="settings-form">
             <div className="toggle-row">
               <div><strong>Dark Mode</strong><p>Switch between light and dark theme</p></div>
               <button className={`toggle-switch ${dark ? 'on' : ''}`} onClick={() => setDark(!dark)} aria-label="Toggle dark mode" role="switch" aria-checked={dark}>
@@ -719,16 +808,10 @@ function SettingsPage({ dark, setDark }: { dark: boolean; setDark: (v: boolean) 
         </article>
         <article className="panel settings-card">
           <div className="panel-heading"><h2>Security</h2></div>
-          <div className="settings-form" style={{ padding: '16px' }}>
-            <label className="modal-form" style={{ display: 'grid', gap: '8px' }}>
-              Current Password
-              <input type="password" placeholder="••••••••" />
-            </label>
-            <label className="modal-form" style={{ display: 'grid', gap: '8px', marginTop: '12px' }}>
-              New Password
-              <input type="password" placeholder="••••••••" />
-            </label>
-            <div className="form-actions" style={{ marginTop: '16px' }}>
+          <div className="settings-form">
+            <label>Current Password<input type="password" placeholder="••••••••" /></label>
+            <label>New Password<input type="password" placeholder="••••••••" /></label>
+            <div className="form-actions">
               <button className="btn-primary" onClick={() => alert('Password updated!')}>Update Password</button>
             </div>
           </div>
@@ -740,41 +823,44 @@ function SettingsPage({ dark, setDark }: { dark: boolean; setDark: (v: boolean) 
 
 // ─── Dashboard page ───────────────────────────────────────────────────────────
 
-function DashboardPage({
-  transactions,
-  onAdd,
-  onEdit,
-  onDelete,
-  onViewAll,
-  period,
-  setPeriod,
-  cashBars,
-}: {
-  transactions: Transaction[];
-  onAdd: () => void;
-  onEdit: (t: Transaction) => void;
-  onDelete: (id: string) => void;
-  onViewAll: () => void;
-  period: string;
-  setPeriod: (p: string) => void;
-  cashBars: [number, number][];
+function DashboardPage({ user, transactions, onAdd, onEdit, onDelete, onViewAll, period, setPeriod, cashBars }: {
+  user: User; transactions: Transaction[];
+  onAdd: () => void; onEdit: (t: Transaction) => void; onDelete: (id: string) => void;
+  onViewAll: () => void; period: string; setPeriod: (p: string) => void; cashBars: [number, number][];
 }) {
-  const [periodOpen, setPeriodOpen] = useState(false);
+  const [periodOpen, setPeriodOpen]         = useState(false);
   const [cashPeriodOpen, setCashPeriodOpen] = useState(false);
   const periodRef = useRef<HTMLDivElement>(null);
-  const cashRef = useRef<HTMLDivElement>(null);
+  const cashRef   = useRef<HTMLDivElement>(null);
   useOutsideClick(periodRef, () => setPeriodOpen(false));
-  useOutsideClick(cashRef, () => setCashPeriodOpen(false));
+  useOutsideClick(cashRef,   () => setCashPeriodOpen(false));
+
+  const totalIncome  = transactions.filter(t => t.type === 'Income').reduce((s, t) => s + t.rawAmount, 0);
+  const totalExpense = transactions.filter(t => t.type === 'Expense').reduce((s, t) => s + t.rawAmount, 0);
+  const balance      = totalIncome - totalExpense;
+  const savingsRate  = totalIncome > 0 ? Math.round((balance / totalIncome) * 100) : 0;
+
+  // Spending breakdown for donut
+  const catMap: Record<string, { amount: number; color: string }> = {};
+  transactions.filter(t => t.type === 'Expense').forEach(t => {
+    if (!catMap[t.category]) catMap[t.category] = { amount: 0, color: t.categoryColor };
+    catMap[t.category].amount += t.rawAmount;
+  });
+  const spendingData = Object.entries(catMap).map(([label, v]) => ({
+    label, color: v.color,
+    amount: fmt(v.amount),
+    percent: totalExpense > 0 ? Math.round((v.amount / totalExpense) * 100) + '%' : '0%',
+  }));
 
   const recent = transactions.slice(0, 5);
 
   return (
     <>
       <section className="summary-grid">
-        <SummaryCard title="Total Income" amount="₦250,000" note="12.5% vs last month" color="#25bd8d" icon={<ArrowDownLeft size={18} />} />
-        <SummaryCard title="Total Expenses" amount="₦80,500" note="8.3% vs last month" color="#f04b67" icon={<ArrowUpRight size={18} />} positive={false} />
-        <SummaryCard title="Balance" amount="₦169,500" note="15.8% vs last month" color="#3277ed" icon={<WalletCards size={18} />} />
-        <SummaryCard title="Savings Rate" amount="68%" note="Good job!" color="#8754ed" icon={<Sparkles size={18} />} />
+        <SummaryCard title="Total Income"   amount={fmt(totalIncome)}  note={totalIncome > 0 ? 'Updated just now' : 'No income yet'} color="#25bd8d" icon={<ArrowDownLeft size={18} />} />
+        <SummaryCard title="Total Expenses" amount={fmt(totalExpense)} note={totalExpense > 0 ? 'Updated just now' : 'No expenses yet'} color="#f04b67" icon={<ArrowUpRight size={18} />} positive={false} />
+        <SummaryCard title="Balance"        amount={fmt(balance)}      note={balance >= 0 ? 'Looking good!' : 'Spending exceeds income'} color="#3277ed" icon={<WalletCards size={18} />} positive={balance >= 0} />
+        <SummaryCard title="Savings Rate"   amount={`${savingsRate}%`} note={savingsRate >= 20 ? 'Great work!' : transactions.length === 0 ? 'Add transactions' : 'Keep it up!'} color="#8754ed" icon={<Sparkles size={18} />} />
       </section>
 
       <section className="charts-grid">
@@ -791,8 +877,22 @@ function DashboardPage({
             </div>
           </div>
           <div className="spending-body">
-            <DonutChart />
-            <div className="legend">{spending.map(item => <div className="legend-row" key={item.label}><span className="legend-label"><i style={{ backgroundColor: item.color }} />{item.label}</span><strong>{item.amount}</strong><small>{item.percent}</small></div>)}</div>
+            {spendingData.length === 0 ? (
+              <EmptyState icon={<Grid2X2 size={28} />} title="No spending data" body="Your spending breakdown will appear once you add expense transactions." />
+            ) : (
+              <>
+                <DonutChart total={totalExpense} />
+                <div className="legend">
+                  {spendingData.map(item => (
+                    <div className="legend-row" key={item.label}>
+                      <span className="legend-label"><i style={{ backgroundColor: item.color }} />{item.label}</span>
+                      <strong>{item.amount}</strong>
+                      <small>{item.percent}</small>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </article>
 
@@ -821,24 +921,32 @@ function DashboardPage({
           <button className="view-all" onClick={onViewAll}>View All</button>
         </div>
         <div className="table-wrap">
-          <table>
-            <thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Type</th><th>Amount</th><th>Status</th><th /></tr></thead>
-            <tbody>
-              {recent.map(transaction => (
-                <tr key={transaction.id}>
-                  <td>{transaction.date}</td>
-                  <td className="description">{transaction.description}</td>
-                  <td><span className="category"><i style={{ backgroundColor: transaction.categoryColor }} />{transaction.category}</span></td>
-                  <td><span className={transaction.type === 'Income' ? 'type income' : 'type expense'}>{transaction.type === 'Income' ? <ArrowDown size={14} /> : <ArrowUp size={14} />}</span></td>
-                  <td className={transaction.type === 'Income' ? 'amount income-text' : 'amount expense-text'}>{transaction.amount}</td>
-                  <td><span className="status"><Check size={12} /> Completed</span></td>
-                  <td>
-                    <RowMenu transaction={transaction} onEdit={() => onEdit(transaction)} onDelete={() => onDelete(transaction.id)} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {recent.length === 0 ? (
+            <EmptyState
+              icon={<CreditCard size={28} />}
+              title="No transactions yet"
+              body="Tap 'Add Transaction' to log your first one."
+              action="+ Add Transaction"
+              onAction={onAdd}
+            />
+          ) : (
+            <table>
+              <thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Type</th><th>Amount</th><th>Status</th><th /></tr></thead>
+              <tbody>
+                {recent.map(t => (
+                  <tr key={t.id}>
+                    <td>{t.date}</td>
+                    <td className="description">{t.description}</td>
+                    <td><span className="category"><i style={{ backgroundColor: t.categoryColor }} />{t.category}</span></td>
+                    <td><span className={t.type === 'Income' ? 'type income' : 'type expense'}>{t.type === 'Income' ? <ArrowDown size={14} /> : <ArrowUp size={14} />}</span></td>
+                    <td className={t.type === 'Income' ? 'amount income-text' : 'amount expense-text'}>{t.amount}</td>
+                    <td><span className="status"><Check size={12} /> Completed</span></td>
+                    <td><RowMenu transaction={t} onEdit={() => onEdit(t)} onDelete={() => onDelete(t.id)} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </section>
     </>
@@ -848,31 +956,50 @@ function DashboardPage({
 // ─── Root App ─────────────────────────────────────────────────────────────────
 
 function App() {
-  const [activeNav, setActiveNav] = useState('Dashboard');
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [dark, setDark] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [period, setPeriod] = useState('This Month');
-  const [dateLabel, setDateLabel] = useState('May 1 – May 31, 2024');
+  const [authUser, setAuthUser]   = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  // Listen to Firebase auth state
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, user => {
+      setAuthUser(user);
+      setAuthLoading(false);
+    });
+    return unsub;
+  }, []);
+
+  const [activeNav, setActiveNav]         = useState('Dashboard');
+  const [mobileOpen, setMobileOpen]       = useState(false);
+  const [dark, setDark]                   = useState(false);
+  const [searchQuery, setSearchQuery]     = useState('');
+  const [period, setPeriod]               = useState('This Month');
+  const [dateLabel, setDateLabel]         = useState('This Month');
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showPremium, setShowPremium] = useState(false);
+  const [showPremium, setShowPremium]     = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
-  const [txModal, setTxModal] = useState<{ open: boolean; initial?: Transaction }>({ open: false });
-  const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
+  const [transactions, setTransactions]   = useState<Transaction[]>([]);
+  const [txModal, setTxModal]             = useState<{ open: boolean; initial?: Transaction }>({ open: false });
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
 
   const profileRef = useRef<HTMLDivElement>(null);
-  const notifRef = useRef<HTMLDivElement>(null);
+  const notifRef   = useRef<HTMLDivElement>(null);
   useOutsideClick(profileRef, () => setShowProfileMenu(false));
-  useOutsideClick(notifRef, () => setShowNotifications(false));
+  useOutsideClick(notifRef,   () => setShowNotifications(false));
 
-  // Dark mode: toggle class on <html>
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
   }, [dark]);
 
-  const cashBars = period === 'Last Month' ? lastMonthBars : chartBars;
+  // Reset all user data when auth user changes (e.g. different user logs in)
+  useEffect(() => {
+    setTransactions([]);
+    setNotifications([]);
+    setActiveNav('Dashboard');
+    setSearchQuery('');
+  }, [authUser?.uid]);
+
+  const cashBars   = period === 'Last Month' ? lastMonthBars : chartBars;
   const unreadCount = notifications.filter(n => !n.read).length;
 
   function handleSaveTransaction(t: Transaction) {
@@ -881,61 +1008,58 @@ function App() {
       return exists ? prev.map(p => p.id === t.id ? t : p) : [t, ...prev];
     });
   }
-
   function handleDeleteTransaction(id: string) {
     setTransactions(prev => prev.filter(t => t.id !== id));
   }
+  function markAllRead()        { setNotifications(prev => prev.map(n => ({ ...n, read: true }))); }
+  function clearNotifications() { setNotifications([]); setShowNotifications(false); }
+  function markRead(id: string) { setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n)); }
 
-  function markAllRead() {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  }
-
-  function clearNotifications() {
-    setNotifications([]);
-    setShowNotifications(false);
-  }
-
-  function markRead(id: string) {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  function handleSignOut() {
+    signOut(auth);
+    setShowProfileMenu(false);
   }
 
   const navToTransactions = () => { setActiveNav('Transactions'); setMobileOpen(false); };
 
+  // ── Render guards ──────────────────────────────────────────────────────────
+  if (authLoading) return <LoadingScreen />;
+  if (!authUser)   return <AuthPage />;
+
+  // ── Page renderer ──────────────────────────────────────────────────────────
   function renderPage() {
+    if (!authUser) return null;
     switch (activeNav) {
-      case 'Transactions':
-        return <TransactionsPage transactions={transactions} onAdd={() => setTxModal({ open: true })} onEdit={t => setTxModal({ open: true, initial: t })} onDelete={handleDeleteTransaction} searchQuery={searchQuery} />;
-      case 'Analytics':
-        return <AnalyticsPage />;
-      case 'Budgets':
-        return <BudgetsPage onAddTransaction={() => setTxModal({ open: true })} />;
-      case 'Goals':
-        return <GoalsPage />;
-      case 'Categories':
-        return <CategoriesPage />;
-      case 'Calendar':
-        return <CalendarPage transactions={transactions} />;
-      case 'Settings':
-        return <SettingsPage dark={dark} setDark={setDark} />;
-      default:
-        return (
-          <DashboardPage
-            transactions={transactions}
-            onAdd={() => setTxModal({ open: true })}
-            onEdit={t => setTxModal({ open: true, initial: t })}
-            onDelete={handleDeleteTransaction}
-            onViewAll={navToTransactions}
-            period={period}
-            setPeriod={setPeriod}
-            cashBars={cashBars}
-          />
-        );
+      case 'Transactions': return <TransactionsPage transactions={transactions} onAdd={() => setTxModal({ open: true })} onEdit={t => setTxModal({ open: true, initial: t })} onDelete={handleDeleteTransaction} searchQuery={searchQuery} />;
+      case 'Analytics':    return <AnalyticsPage transactions={transactions} />;
+      case 'Budgets':      return <BudgetsPage transactions={transactions} onAddTransaction={() => setTxModal({ open: true })} />;
+      case 'Goals':        return <GoalsPage transactions={transactions} />;
+      case 'Categories':   return <CategoriesPage transactions={transactions} />;
+      case 'Calendar':     return <CalendarPage transactions={transactions} />;
+      case 'Settings':     return <SettingsPage user={authUser} dark={dark} setDark={setDark} />;
+      default:             return (
+        <DashboardPage
+          user={authUser}
+          transactions={transactions}
+          onAdd={() => setTxModal({ open: true })}
+          onEdit={t => setTxModal({ open: true, initial: t })}
+          onDelete={handleDeleteTransaction}
+          onViewAll={navToTransactions}
+          period={period}
+          setPeriod={setPeriod}
+          cashBars={cashBars}
+        />
+      );
     }
   }
 
+  const displayName = authUser.displayName;
+  const userInitials = initials(displayName);
+  const userFirstName = firstName(displayName);
+
   return (
     <div className="app-shell">
-      {/* Sidebar */}
+      {/* ── Sidebar ── */}
       <aside className={`sidebar ${mobileOpen ? 'mobile-visible' : ''}`}>
         <div className="brand">
           <div className="brand-mark"><WalletCards size={19} /></div>
@@ -964,20 +1088,23 @@ function App() {
 
         <div className="profile-wrap" ref={profileRef}>
           <button className="profile" onClick={() => setShowProfileMenu(o => !o)}>
-            <div className="avatar">PK</div>
-            <div><strong>Prince K.</strong><small>prince@example.com</small></div>
+            <div className="avatar">{userInitials}</div>
+            <div>
+              <strong>{displayName ?? 'User'}</strong>
+              <small>{authUser.email}</small>
+            </div>
             <ChevronDown size={15} />
           </button>
           {showProfileMenu && (
             <div className="profile-menu">
-              <button onClick={() => { setActiveNav('Settings'); setShowProfileMenu(false); setMobileOpen(false); }}><User size={13} /> View Profile</button>
-              <button onClick={() => { setShowProfileMenu(false); alert('Signed out. Goodbye, Prince!'); }}><LogOut size={13} /> Sign Out</button>
+              <button onClick={() => { setActiveNav('Settings'); setShowProfileMenu(false); setMobileOpen(false); }}><UserIcon size={13} /> View Profile</button>
+              <button onClick={handleSignOut}><LogOut size={13} /> Sign Out</button>
             </div>
           )}
         </div>
       </aside>
 
-      {/* Main content */}
+      {/* ── Main content ── */}
       <main className="main-content">
         <header className="topbar">
           <button className="menu-button" onClick={() => setMobileOpen(true)} aria-label="Open menu"><Menu size={21} /></button>
@@ -1013,7 +1140,7 @@ function App() {
                     </div>
                   </div>
                   {notifications.length === 0
-                    ? <p className="notif-empty">No notifications</p>
+                    ? <p className="notif-empty">You're all caught up 🎉</p>
                     : notifications.map(n => (
                       <div key={n.id} className={`notif-item ${n.read ? 'read' : ''}`} onClick={() => markRead(n.id)}>
                         <span className={`notif-dot ${n.read ? '' : 'unread'}`} />
@@ -1032,8 +1159,8 @@ function App() {
         {activeNav === 'Dashboard' && (
           <section className="page-heading">
             <div>
-              <h1>Good morning, Prince <span>👋</span></h1>
-              <p>Here&apos;s what&apos;s happening with your finances today.</p>
+              <h1>{greeting()}, {userFirstName} <span>👋</span></h1>
+              <p>Here's what's happening with your finances today.</p>
             </div>
             <button className="date-button" onClick={() => setShowDatePicker(true)}>
               <CalendarDays size={17} /> {dateLabel} <ChevronDown size={15} />
@@ -1041,12 +1168,10 @@ function App() {
           </section>
         )}
 
-        <div className="page-body">
-          {renderPage()}
-        </div>
+        <div className="page-body">{renderPage()}</div>
       </main>
 
-      {/* Modals */}
+      {/* ── Modals ── */}
       {txModal.open && (
         <TransactionModal
           initial={txModal.initial}
@@ -1055,11 +1180,7 @@ function App() {
         />
       )}
       {showDatePicker && (
-        <DateRangeModal
-          current={dateLabel}
-          onSave={setDateLabel}
-          onClose={() => setShowDatePicker(false)}
-        />
+        <DateRangeModal current={dateLabel} onSave={setDateLabel} onClose={() => setShowDatePicker(false)} />
       )}
       {showPremium && <PremiumModal onClose={() => setShowPremium(false)} />}
     </div>
