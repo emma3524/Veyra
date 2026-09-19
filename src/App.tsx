@@ -123,6 +123,37 @@ function greeting(): string {
   return 'Good evening';
 }
 
+// ─── Filter transactions by period ───────────────────────────────────────────
+
+function filterByPeriod(transactions: Transaction[], period: string): Transaction[] {
+  const now   = new Date();
+  const year  = now.getFullYear();
+  const month = now.getMonth(); // 0-indexed
+
+  return transactions.filter(t => {
+    const d = new Date(t.date);
+    if (isNaN(d.getTime())) return false;
+
+    switch (period) {
+      case 'This Month':
+        return d.getFullYear() === year && d.getMonth() === month;
+      case 'Last Month': {
+        const lm = month === 0 ? 11 : month - 1;
+        const ly = month === 0 ? year - 1 : year;
+        return d.getFullYear() === ly && d.getMonth() === lm;
+      }
+      case 'Last 3 Months': {
+        const cutoff = new Date(year, month - 2, 1);
+        return d >= cutoff;
+      }
+      case 'This Year':
+        return d.getFullYear() === year;
+      default:
+        return true;
+    }
+  });
+}
+
 // ─── Shared UI atoms ──────────────────────────────────────────────────────────
 
 function IconBadge({ color, children }: { color: string; children: ReactNode }) {
@@ -950,14 +981,17 @@ function DashboardPage({ user, transactions, onAdd, onEdit, onDelete, onViewAll,
   useOutsideClick(periodRef, () => setPeriodOpen(false));
   useOutsideClick(cashRef,   () => setCashPeriodOpen(false));
 
-  const totalIncome  = transactions.filter(t => t.type === 'Income').reduce((s, t) => s + t.rawAmount, 0);
-  const totalExpense = transactions.filter(t => t.type === 'Expense').reduce((s, t) => s + t.rawAmount, 0);
+  // ── Filter all data by the selected period ────────────────────────────────
+  const periodTxs = filterByPeriod(transactions, period);
+
+  const totalIncome  = periodTxs.filter(t => t.type === 'Income').reduce((s, t) => s + t.rawAmount, 0);
+  const totalExpense = periodTxs.filter(t => t.type === 'Expense').reduce((s, t) => s + t.rawAmount, 0);
   const balance      = totalIncome - totalExpense;
   const savingsRate  = totalIncome > 0 ? Math.round((balance / totalIncome) * 100) : 0;
 
-  // Spending breakdown for donut
+  // Spending breakdown for donut — from period-filtered data
   const catMap: Record<string, { amount: number; color: string }> = {};
-  transactions.filter(t => t.type === 'Expense').forEach(t => {
+  periodTxs.filter(t => t.type === 'Expense').forEach(t => {
     if (!catMap[t.category]) catMap[t.category] = { amount: 0, color: t.categoryColor };
     catMap[t.category].amount += t.rawAmount;
   });
@@ -967,15 +1001,15 @@ function DashboardPage({ user, transactions, onAdd, onEdit, onDelete, onViewAll,
     percent: totalExpense > 0 ? Math.round((v.amount / totalExpense) * 100) + '%' : '0%',
   }));
 
-  const recent = transactions.slice(0, 5);
+  const recent = periodTxs.slice(0, 5);
 
   return (
     <>
       <section className="summary-grid">
-        <SummaryCard title="Total Income"   amount={fmt(totalIncome)}  note={totalIncome > 0 ? 'Updated just now' : 'No income yet'} color="#25bd8d" icon={<ArrowDownLeft size={18} />} />
-        <SummaryCard title="Total Expenses" amount={fmt(totalExpense)} note={totalExpense > 0 ? 'Updated just now' : 'No expenses yet'} color="#f04b67" icon={<ArrowUpRight size={18} />} positive={false} />
+        <SummaryCard title="Total Income"   amount={fmt(totalIncome)}  note={totalIncome > 0 ? `${period}` : 'No income yet'} color="#25bd8d" icon={<ArrowDownLeft size={18} />} />
+        <SummaryCard title="Total Expenses" amount={fmt(totalExpense)} note={totalExpense > 0 ? `${period}` : 'No expenses yet'} color="#f04b67" icon={<ArrowUpRight size={18} />} positive={false} />
         <SummaryCard title="Balance"        amount={fmt(balance)}      note={balance >= 0 ? 'Looking good!' : 'Spending exceeds income'} color="#3277ed" icon={<WalletCards size={18} />} positive={balance >= 0} />
-        <SummaryCard title="Savings Rate"   amount={`${savingsRate}%`} note={savingsRate >= 20 ? 'Great work!' : transactions.length === 0 ? 'Add transactions' : 'Keep it up!'} color="#8754ed" icon={<Sparkles size={18} />} />
+        <SummaryCard title="Savings Rate"   amount={`${savingsRate}%`} note={savingsRate >= 20 ? 'Great work!' : periodTxs.length === 0 ? 'No data yet' : 'Keep it up!'} color="#8754ed" icon={<Sparkles size={18} />} />
       </section>
 
       <section className="charts-grid">
@@ -993,7 +1027,7 @@ function DashboardPage({ user, transactions, onAdd, onEdit, onDelete, onViewAll,
           </div>
           <div className="spending-body">
             {spendingData.length === 0 ? (
-              <EmptyState icon={<Grid2X2 size={28} />} title="No spending data" body="Your spending breakdown will appear once you add expense transactions." />
+              <EmptyState icon={<Grid2X2 size={28} />} title="No spending data" body={transactions.length > 0 ? `No expenses found for ${period}.` : 'Your spending breakdown will appear once you add expense transactions.'} />
             ) : (
               <>
                 <DonutChart
@@ -1043,9 +1077,11 @@ function DashboardPage({ user, transactions, onAdd, onEdit, onDelete, onViewAll,
             <EmptyState
               icon={<CreditCard size={28} />}
               title="No transactions yet"
-              body="Tap 'Add Transaction' to log your first one."
-              action="+ Add Transaction"
-              onAction={onAdd}
+              body={periodTxs.length === 0 && transactions.length > 0
+                ? `No transactions found for ${period}.`
+                : "Tap 'Add Transaction' to log your first one."}
+              action={transactions.length === 0 ? '+ Add Transaction' : undefined}
+              onAction={transactions.length === 0 ? onAdd : undefined}
             />
           ) : (
             <table>
