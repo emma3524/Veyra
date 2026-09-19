@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
-import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
+import { onAuthStateChanged, signOut, updateProfile, type User } from 'firebase/auth';
 import { auth } from './firebase';
+import {
+  subscribeTransactions, subscribeNotifications,
+  addTransaction, updateTransaction, deleteTransaction,
+  markNotificationRead, markAllNotificationsRead,
+  clearAllNotifications, saveProfile, getProfile,
+  type TxRecord, type NotifRecord,
+} from './db';
 import AuthPage from './AuthPage';
 import LandingPage from './LandingPage';
 import {
@@ -17,22 +24,9 @@ import {
 
 type IconComponent = typeof LayoutDashboard;
 
-type Transaction = {
-  id: string;
-  date: string;
-  description: string;
-  category: string;
-  categoryColor: string;
-  type: 'Income' | 'Expense';
-  amount: string;
-  rawAmount: number;
-};
-
-type Notification = {
-  id: string;
-  text: string;
-  read: boolean;
-};
+// Re-export db types under the names the UI uses
+type Transaction = TxRecord;
+type Notification = NotifRecord;
 
 type Budget = {
   label: string;
@@ -364,6 +358,8 @@ function TransactionModal({ initial, onSave, onClose }: {
       type,
       amount: type === 'Income' ? `+ ${fmt(num)}` : `- ${fmt(num)}`,
       rawAmount: num,
+      // preserve createdAt on edit so Firestore handler knows it's an update
+      ...(initial?.createdAt !== undefined ? { createdAt: initial.createdAt } : {}),
     });
     onClose();
   }
@@ -870,14 +866,32 @@ function CalendarPage({ transactions }: { transactions: Transaction[] }) {
 // ─── Settings page ────────────────────────────────────────────────────────────
 
 function SettingsPage({ user, dark, setDark }: { user: User; dark: boolean; setDark: (v: boolean) => void }) {
-  const [name, setName]       = useState(user.displayName ?? '');
+  const [name, setName]         = useState(user.displayName ?? '');
   const [currency, setCurrency] = useState('NGN (₦)');
-  const [saved, setSaved]     = useState(false);
+  const [saved, setSaved]       = useState(false);
+  const [saving, setSaving]     = useState(false);
 
-  function handleSave(e: React.FormEvent) {
+  // Load saved profile prefs from Firestore on mount
+  useEffect(() => {
+    getProfile(user.uid).then(p => {
+      if (p?.currency) setCurrency(p.currency);
+      if (p?.displayName) setName(p.displayName);
+    });
+  }, [user.uid]);
+
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    setSaving(true);
+    try {
+      // Update Firebase Auth display name
+      await updateProfile(user, { displayName: name.trim() });
+      // Save prefs to Firestore
+      await saveProfile(user.uid, { displayName: name.trim(), currency });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -893,7 +907,7 @@ function SettingsPage({ user, dark, setDark }: { user: User; dark: boolean; setD
             <label>Currency<select value={currency} onChange={e => setCurrency(e.target.value)}>
               <option>NGN (₦)</option><option>USD ($)</option><option>GBP (£)</option><option>EUR (€)</option>
             </select></label>
-            <div className="form-actions"><button type="submit" className="btn-primary">Save Changes</button></div>
+            <div className="form-actions"><button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</button></div>
           </form>
         </article>
         <article className="panel settings-card">
@@ -1065,31 +1079,29 @@ function App() {
   const [page, setPage] = useState<'landing' | 'auth' | 'app'>('landing');
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('signup');
 
-  // Listen to Firebase auth state
+  // ── Firebase auth listener ─────────────────────────────────────────────────
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, user => {
       setAuthUser(user);
       setAuthLoading(false);
-      // If already signed in, skip straight to app
-      if (user) setPage('app');
-      // If signed out while on app, go back to landing
+      if (user)  setPage('app');
       if (!user) setPage(prev => prev === 'app' ? 'landing' : prev);
     });
     return unsub;
   }, []);
 
-  const [activeNav, setActiveNav]         = useState('Dashboard');
-  const [mobileOpen, setMobileOpen]       = useState(false);
-  const [dark, setDark]                   = useState(false);
-  const [searchQuery, setSearchQuery]     = useState('');
-  const [period, setPeriod]               = useState('This Month');
-  const [dateLabel, setDateLabel]         = useState('This Month');
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showPremium, setShowPremium]     = useState(false);
+  const [activeNav, setActiveNav]             = useState('Dashboard');
+  const [mobileOpen, setMobileOpen]           = useState(false);
+  const [dark, setDark]                       = useState(false);
+  const [searchQuery, setSearchQuery]         = useState('');
+  const [period, setPeriod]                   = useState('This Month');
+  const [dateLabel, setDateLabel]             = useState('This Month');
+  const [showDatePicker, setShowDatePicker]   = useState(false);
+  const [showPremium, setShowPremium]         = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [transactions, setTransactions]   = useState<Transaction[]>([]);
-  const [txModal, setTxModal]             = useState<{ open: boolean; initial?: Transaction }>({ open: false });
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [transactions, setTransactions]       = useState<Transaction[]>([]);
+  const [txModal, setTxModal]                 = useState<{ open: boolean; initial?: Transaction }>({ open: false });
+  const [notifications, setNotifications]     = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
 
   const profileRef = useRef<HTMLDivElement>(null);
@@ -1097,33 +1109,63 @@ function App() {
   useOutsideClick(profileRef, () => setShowProfileMenu(false));
   useOutsideClick(notifRef,   () => setShowNotifications(false));
 
+  // ── Dark mode ──────────────────────────────────────────────────────────────
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
   }, [dark]);
 
-  // Reset all user data when auth user changes (e.g. different user logs in)
+  // ── Firestore real-time listeners — attach when user logs in ───────────────
   useEffect(() => {
-    setTransactions([]);
-    setNotifications([]);
-    setActiveNav('Dashboard');
-    setSearchQuery('');
+    if (!authUser) {
+      setTransactions([]);
+      setNotifications([]);
+      setActiveNav('Dashboard');
+      setSearchQuery('');
+      return;
+    }
+    const uid = authUser.uid;
+    const unsubTx    = subscribeTransactions(uid, setTransactions);
+    const unsubNotif = subscribeNotifications(uid, setNotifications);
+    return () => { unsubTx(); unsubNotif(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUser?.uid]);
 
-  const cashBars   = period === 'Last Month' ? lastMonthBars : chartBars;
+  const cashBars    = period === 'Last Month' ? lastMonthBars : chartBars;
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  function handleSaveTransaction(t: Transaction) {
-    setTransactions(prev => {
-      const exists = prev.find(p => p.id === t.id);
-      return exists ? prev.map(p => p.id === t.id ? t : p) : [t, ...prev];
-    });
+  // ── Transaction handlers — write to Firestore ──────────────────────────────
+  async function handleSaveTransaction(t: Transaction) {
+    if (!authUser) return;
+    if (t.createdAt !== undefined) {
+      await updateTransaction(authUser.uid, t);
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id, createdAt, ...data } = t;
+      await addTransaction(authUser.uid, data);
+    }
   }
-  function handleDeleteTransaction(id: string) {
-    setTransactions(prev => prev.filter(t => t.id !== id));
+
+  async function handleDeleteTransaction(id: string) {
+    if (!authUser) return;
+    await deleteTransaction(authUser.uid, id);
   }
-  function markAllRead()        { setNotifications(prev => prev.map(n => ({ ...n, read: true }))); }
-  function clearNotifications() { setNotifications([]); setShowNotifications(false); }
-  function markRead(id: string) { setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n)); }
+
+  // ── Notification handlers — write to Firestore ─────────────────────────────
+  async function markRead(id: string) {
+    if (!authUser) return;
+    await markNotificationRead(authUser.uid, id);
+  }
+
+  async function markAllRead() {
+    if (!authUser) return;
+    await markAllNotificationsRead(authUser.uid, notifications.map(n => n.id));
+  }
+
+  async function clearNotifications() {
+    if (!authUser) return;
+    await clearAllNotifications(authUser.uid, notifications.map(n => n.id));
+    setShowNotifications(false);
+  }
 
   function handleSignOut() {
     signOut(auth);
